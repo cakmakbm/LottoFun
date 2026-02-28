@@ -1,6 +1,7 @@
 package com.bmc.lottofun.service;
 
 
+import com.bmc.lottofun.dto.request.UserLoginRequest;
 import com.bmc.lottofun.dto.request.UserRegisterRequest;
 import com.bmc.lottofun.entity.User;
 import com.bmc.lottofun.repository.UserRepository;
@@ -28,5 +29,15 @@ public class UserService {
                 .build();
         return userRepository.save(user);
 
+    }
+
+    public User loginUser(UserLoginRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if(!user.getPassword().equals(request.getPassword())){
+            throw new RuntimeException("Incorrect password");
+        }
+        return user;
     }
 }

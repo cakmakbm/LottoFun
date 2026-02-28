@@ -1,5 +1,6 @@
 package com.bmc.lottofun.controller;
 
+import com.bmc.lottofun.dto.request.UserLoginRequest;
 import com.bmc.lottofun.dto.request.UserRegisterRequest;
 import com.bmc.lottofun.entity.User;
 import com.bmc.lottofun.service.UserService;
@@ -25,6 +26,13 @@ public class UserController {
 
         return new ResponseEntity<>(savedUser, HttpStatus.CREATED);
     }
+    @PostMapping("/login")
+    public ResponseEntity<User> login(@Valid @RequestBody UserLoginRequest request) {
+        User loggedinUser = userService.loginUser(request);
+        return new ResponseEntity<>(loggedinUser, HttpStatus.OK);
+    }
+
+
 
 
 
