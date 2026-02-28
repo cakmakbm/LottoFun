@@ -2,6 +2,7 @@ package com.bmc.lottofun.entity;
 
 import com.bmc.lottofun.entity.enums.TicketStatus;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 import java.math.BigDecimal;
 import java.util.Set;
@@ -29,6 +30,9 @@ public class Ticket {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TicketStatus status;
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime purchaseTime;
 
     private BigDecimal prizeAmount;
 
