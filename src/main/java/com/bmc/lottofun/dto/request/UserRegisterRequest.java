@@ -15,7 +15,7 @@ public class UserRegisterRequest {
     private String username;
 
     @NotBlank(message = "Password can not be empty")
-    @Size(min=6, message = "Password must be at least six charachter")
+    @Size(min=6, message = "Password must be at least six char")
     private String password;
 
 
