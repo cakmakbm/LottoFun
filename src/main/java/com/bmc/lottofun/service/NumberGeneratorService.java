@@ -23,7 +23,7 @@ public class NumberGeneratorService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    private Set<Integer> generateWinningNumbers(){
+    public Set<Integer> generateWinningNumbers(){
         Set<Integer> winningNumbers = new HashSet<>();
 
         while(winningNumbers.size() < requiredNumberCount){
