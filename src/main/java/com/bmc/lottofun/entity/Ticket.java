@@ -1,12 +1,24 @@
 package com.bmc.lottofun.entity;
 
+import com.bmc.lottofun.entity.enums.DrawStatus;
 import com.bmc.lottofun.entity.enums.TicketStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 import java.math.BigDecimal;
 import java.util.Set;
 
+@Entity
+@Table(name = "tickets")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Ticket {
 
     @Id
@@ -21,6 +33,8 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name= "draw_id", nullable = false)
     private Draw draw;
+
+
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "ticket_numbers",joinColumns = @JoinColumn(name = "ticket_id"))
