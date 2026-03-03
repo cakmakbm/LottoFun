@@ -60,9 +60,10 @@ public class PrizeDistributionService {
                 newStatus = TicketStatus.NO_PRIZE;
                 prize = BigDecimal.ZERO;
             }
-
+            ticket.setMatchCount((int) matchCount);
             ticket.setStatus(newStatus);
             ticket.setPrizeAmount(prize);
+
 
             if (prize.compareTo(BigDecimal.ZERO) > 0) {
                 User user = ticket.getUser();
