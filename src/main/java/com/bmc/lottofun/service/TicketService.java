@@ -6,91 +6,57 @@ import com.bmc.lottofun.entity.Ticket;
 import com.bmc.lottofun.entity.User;
 import com.bmc.lottofun.entity.enums.DrawStatus;
 import com.bmc.lottofun.entity.enums.TicketStatus;
+import com.bmc.lottofun.exception.NotFoundException;
 import com.bmc.lottofun.repository.DrawRepository;
 import com.bmc.lottofun.repository.TicketRepository;
-import com.bmc.lottofun.repository.UserRepository;
-import jakarta.validation.constraints.NotNull;
+import com.bmc.lottofun.security.AuthHelper;
+import com.bmc.lottofun.service.interfaces.ITicketService;
+import com.bmc.lottofun.service.interfaces.ITicketValidator;
+import com.bmc.lottofun.service.interfaces.IUserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import lombok.*;
-
-
-
+import org.springframework.transaction.annotation.Transactional;
 
 
 @Service
 @RequiredArgsConstructor
-public class TicketService {
-    private final UserRepository userRepository;
+public class TicketService implements ITicketService {
+
     private final TicketRepository ticketRepository;
     private final DrawRepository drawRepository;
-
-
-    @Value("${lottery.rule.number-count}")
-    private int requiredNumberCount;
-
-    @Value("${lottery.rule.min-number}")
-    private int minNumber;
-
-    @Value("${lottery.rule.max-number}")
-    private int maxNumber;
+    private final IUserService userService;
+    private final ITicketValidator ticketValidator;
+    private final AuthHelper authHelper;
 
     @Value("${lottery.rule.ticket-price}")
     private BigDecimal ticketPrice;
+    @Value("${lottery.rule.number-count}")
+    private int numberCount;
 
-    public void buyTickets(@NotNull TicketPurchaseRequest ticketPurchaseRequest) {
-        List<Integer> selectedNumbers = ticketPurchaseRequest.getSelectedNumbers();
+    @Transactional
+    public void buyTickets(TicketPurchaseRequest request) {
+        ticketValidator.validate(request.getSelectedNumbers());
 
-        if(selectedNumbers.size() != requiredNumberCount) {
-            throw new RuntimeException("Number of selected numbers must be " + requiredNumberCount + " but found " + selectedNumbers.size());
-
-        }
-        Set<Integer> selectedNumbersSet = new HashSet<>(selectedNumbers);
-        if(selectedNumbersSet.size() != selectedNumbers.size()) {
-            throw new RuntimeException("Numbers must be unique");
-        }
-
-
-        for(Integer number : selectedNumbers) {
-
-            if(number < minNumber) {
-                throw new RuntimeException("Selected number "+ number + " is less than minimum number " + minNumber);
-            }
-            if(number > maxNumber) {
-                throw new RuntimeException("Selected number "+ number + " is greater than maximum number " + maxNumber);
-            }
-        }
-
-
-        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        User user = userRepository.findByUsername(currentUsername)
-                .orElseThrow(() -> new RuntimeException("Giriş yapan kullanıcı bulunamadı!"));
-
-        if(user.getBalance().compareTo(ticketPrice) < 0) {
-            throw new RuntimeException("Insufficient balance");
-        }
+        User user = authHelper.getCurrentUser();
 
         Draw draw = drawRepository.findByStatus(DrawStatus.OPEN)
-                .orElseThrow(() -> new RuntimeException("No active draw"));
+                .orElseThrow(() -> new NotFoundException("No active draw"));
 
-        user.setBalance(user.getBalance().subtract(ticketPrice));
-        userRepository.save(user);
+        userService.deductBalance(user, ticketPrice);
 
         Ticket ticket = Ticket.builder()
                 .user(user)
                 .draw(draw)
-                .numbers(selectedNumbersSet)
+                .numbers(new HashSet<>(request.getSelectedNumbers()))
                 .status(TicketStatus.PENDING)
                 .purchaseTime(LocalDateTime.now())
                 .prizeAmount(BigDecimal.ZERO)
@@ -98,42 +64,40 @@ public class TicketService {
         ticketRepository.save(ticket);
     }
 
-    public Map<Integer, Long> getWinnerCountsByDraw(Long drawId) {
-        return ticketRepository.findByDrawIdAndMatchCountGreaterThanEqual(drawId, 3)
-                .stream()
-                .collect(Collectors.groupingBy(Ticket::getMatchCount, Collectors.counting()));
-    }
-
-
     public List<TicketResultResponse> getMyTickets() {
+        User user = authHelper.getCurrentUser();
+        List<Ticket> tickets = ticketRepository.findByUserOrderByPurchaseTimeDesc(user);
 
-
-        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-
-
-        User user = userRepository.findByUsername(currentUsername)
-                .orElseThrow(() -> new RuntimeException("Giriş yapan kullanıcı bulunamadı!"));
-
-
-        List<Ticket> myTickets = ticketRepository.findByUserOrderByPurchaseTimeDesc(user);
-
-
-        return myTickets.stream().map(ticket -> {
-            Draw draw = ticket.getDraw();
-
-            return TicketResultResponse.builder()
-                    .ticketId(ticket.getId())
-                    .drawId(draw.getId())
-                    .purchaseTime(ticket.getPurchaseTime())
-                    .selectedNumbers(ticket.getNumbers())
-                    .drawStatus(draw.getStatus().name())
-                    .winningNumbers(draw.getStatus() == DrawStatus.COMPLETED ? draw.getWinningNumbers() : null)
-                    .matchCount(ticket.getMatchCount())
-                    .prize(ticket.getPrizeAmount())
-                    .ticketStatus(ticket.getStatus().name())
-                    .build();
-
-        }).collect(Collectors.toList());
+        return tickets.stream()
+                .map(this::toResultResponse)
+                .collect(Collectors.toList());
     }
 
+    public Map<String, Long> getWinnerCountsByDraw(Long drawId) {
+        return ticketRepository.findByDrawIdAndMatchCountGreaterThanEqual(drawId, numberCount - 2)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        ticket -> ticket.getStatus().name(),
+                        Collectors.counting()
+                ));
+    }
+
+    private TicketResultResponse toResultResponse(Ticket ticket) {
+        Draw draw = ticket.getDraw();
+        boolean completed = draw.getStatus() == DrawStatus.COMPLETED;
+
+        return TicketResultResponse.builder()
+                .ticketId(ticket.getId())
+                .drawId(draw.getId())
+                .purchaseTime(ticket.getPurchaseTime())
+                .selectedNumbers(ticket.getNumbers())
+                .drawStatus(draw.getStatus().name())
+                .winningNumbers(completed ? draw.getWinningNumbers() : null)
+                .matchCount(completed ? ticket.getMatchCount() : null)
+                .prize(ticket.getPrizeAmount() != null && ticket.getPrizeAmount().compareTo(BigDecimal.ZERO) > 0
+                        ? ticket.getPrizeAmount()
+                        : null)
+                .ticketStatus(ticket.getStatus().name())
+                .build();
+    }
 }

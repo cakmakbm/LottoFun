@@ -14,5 +14,5 @@ public class DrawHistoryResponse {
     private Long drawId;
     private LocalDateTime date;
     private Set<Integer> winningNumbers;
-    private Map<Integer, Long> winnersPerCategory;
+    private Map<String, Long> winnersPerCategory;
 }

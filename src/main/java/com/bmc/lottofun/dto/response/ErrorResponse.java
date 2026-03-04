@@ -1,4 +1,4 @@
-package com.bmc.lottofun.dto.request;
+package com.bmc.lottofun.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

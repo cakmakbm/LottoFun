@@ -1,6 +1,7 @@
 package com.bmc.lottofun.service;
 
 
+import com.bmc.lottofun.service.interfaces.INumberGeneratorService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -10,7 +11,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Service
-public class NumberGeneratorService {
+public class NumberGeneratorService implements INumberGeneratorService {
 
     @Value("${lottery.rule.number-count}")
     private int requiredNumberCount;
@@ -26,7 +27,7 @@ public class NumberGeneratorService {
     public Set<Integer> generateWinningNumbers(){
         Set<Integer> winningNumbers = new HashSet<>();
 
-        /*while(winningNumbers.size() < requiredNumberCount){
+       /* while(winningNumbers.size() < requiredNumberCount){
             int randomNumber = secureRandom.nextInt((maxNumber - minNumber) + 1) + minNumber;
 
             winningNumbers.add(randomNumber);

@@ -1,4 +1,4 @@
-package com.bmc.lottofun.service;
+package com.bmc.lottofun.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

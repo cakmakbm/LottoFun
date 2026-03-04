@@ -1,6 +1,6 @@
 package com.bmc.lottofun.controller;
 
-import com.bmc.lottofun.dto.request.AuthResponse;
+import com.bmc.lottofun.dto.response.AuthResponse;
 import com.bmc.lottofun.dto.request.UserLoginRequest;
 import com.bmc.lottofun.dto.request.UserRegisterRequest;
 import com.bmc.lottofun.service.AuthService;
