@@ -1,23 +1,21 @@
 package com.bmc.lottofun.controller;
 
 import com.bmc.lottofun.dto.request.TicketPurchaseRequest;
-import com.bmc.lottofun.entity.Ticket;
-import com.bmc.lottofun.service.TicketService;
+import com.bmc.lottofun.dto.response.TicketResultResponse;
+import com.bmc.lottofun.service.interfaces.ITicketService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/tickets")
 @RequiredArgsConstructor
 public class TicketController {
-    private final TicketService ticketService;
+    private final ITicketService ticketService;
 
 
     @PostMapping("/buy")
@@ -26,5 +24,9 @@ public class TicketController {
         ticketService.buyTickets(request);
         return new ResponseEntity<>("New ticket created!",HttpStatus.CREATED);
 
+    }
+    @GetMapping("/my-results")
+    public ResponseEntity<List<TicketResultResponse>> getMyTicketResults() {
+        return ResponseEntity.ok(ticketService.getMyTickets());
     }
 }

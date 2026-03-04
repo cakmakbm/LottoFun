@@ -48,6 +48,9 @@ public class Ticket {
     @Column(nullable = false, updatable = false)
     private LocalDateTime purchaseTime;
 
+    @Column(name = "match_count")
+    private Integer matchCount;
+
     private BigDecimal prizeAmount;
 
 
