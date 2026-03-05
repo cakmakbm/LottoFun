@@ -743,7 +743,7 @@ src/test/java/com/bmc/lottofun/service/
 ### 7.4 Running the Tests
 
 ```bash
-# Run all unit tests
+# Option 1: Local (no Docker required)
 ./mvnw test
 
 # Run a specific test class
@@ -752,8 +752,10 @@ src/test/java/com/bmc/lottofun/service/
 # Run with detailed output
 ./mvnw test -Dsurefire.useFile=false
 
-# Run tests inside Docker (after building)
-docker compose run --rm app ./mvnw test
+# Option 2: Docker — tests run automatically during image build
+# The Dockerfile uses `mvn verify`, so tests execute on every build.
+# If any test fails, the build stops and no image is produced.
+docker compose build
 ```
 
 ### 7.5 Test Coverage by Component
