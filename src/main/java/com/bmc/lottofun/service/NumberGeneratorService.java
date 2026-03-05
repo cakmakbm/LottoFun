@@ -27,13 +27,13 @@ public class NumberGeneratorService implements INumberGeneratorService {
     public Set<Integer> generateWinningNumbers(){
         Set<Integer> winningNumbers = new HashSet<>();
 
-       /* while(winningNumbers.size() < requiredNumberCount){
+       while(winningNumbers.size() < requiredNumberCount){
             int randomNumber = secureRandom.nextInt((maxNumber - minNumber) + 1) + minNumber;
 
             winningNumbers.add(randomNumber);
-        }*/
+        }
 
-        return Set.of(1,2,3,4,5);
+        return winningNumbers;
     }
 
 

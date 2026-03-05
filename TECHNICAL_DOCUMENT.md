@@ -6,7 +6,8 @@
 3. [Draw Lifecycle & Prize Distribution](#3-draw-lifecycle--prize-distribution)
 4. [API Specification](#4-api-specification)
 5. [Setup Instructions](#5-setup-instructions)
-6. [Testing Approach](#6-testing-approach)
+6. [Testing with Postman](#6-testing-with-postman)
+7. [Testing Approach](#7-testing-approach)
 
 ---
 
@@ -24,35 +25,35 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                     SPRING BOOT APPLICATION                      │
 │                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
+│  ┌──────────────────────────────────────────────────────────┐    │
 │  │                  Security Layer                           │   │
-│  │   JwtAuthenticationFilter → CustomUserDetailsService     │   │
-│  └──────────────────────────────────────────────────────────┘   │
+│  │   JwtAuthenticationFilter → CustomUserDetailsService      │   │
+│  └──────────────────────────────────────────────────────────┘    │
 │                            │                                     │
-│  ┌─────────────────────────▼────────────────────────────────┐   │
+│  ┌─────────────────────────▼────────────────────────────────┐    │
 │  │                  Controller Layer                         │   │
 │  │   AuthController  │  TicketController  │  DrawController  │   │
-│  └─────────────────────────┬────────────────────────────────┘   │
+│  └─────────────────────────┬────────────────────────────────┘    │
 │                            │                                     │
-│  ┌─────────────────────────▼────────────────────────────────┐   │
+│  ┌─────────────────────────▼────────────────────────────────┐    │
 │  │                   Service Layer                           │   │
 │  │                                                           │   │
 │  │  AuthService      UserService      TicketService          │   │
 │  │  DrawService      DrawExecutionService  (async)           │   │
 │  │  PrizeDistributionService  NumberGeneratorService         │   │
 │  │  TicketValidator  AuthHelper                              │   │
-│  └─────────────────────────┬────────────────────────────────┘   │
+│  └─────────────────────────┬────────────────────────────────┘    │
 │                            │                                     │
-│  ┌─────────────────────────▼────────────────────────────────┐   │
+│  ┌─────────────────────────▼────────────────────────────────┐    │
 │  │                 Repository Layer                          │   │
 │  │        UserRepository  DrawRepository  TicketRepository   │   │
-│  └─────────────────────────┬────────────────────────────────┘   │
+│  └─────────────────────────┬────────────────────────────────┘    │
 │                            │                                     │
 └────────────────────────────┼────────────────────────────────────┘
                              │ JPA / Hibernate
                              ▼
                   ┌─────────────────────┐
-                  │    PostgreSQL DB     │
+                  │    PostgreSQL DB    │
                   │                     │
                   │  users              │
                   │  draws              │
@@ -209,7 +210,7 @@ RuntimeException
 
 ```
                         ┌───────────────────┐
-                        │  POST /draws/start │
+                        │  POST /draws/start│
                         └─────────┬─────────┘
                                   │
                                   ▼
@@ -226,13 +227,13 @@ RuntimeException
                     │                             │
                     │                             │ YES
                     │                    ┌────────▼────────────┐
-                    │                    │  POST /draws/execute │
+                    │                    │  POST /draws/execute│
                     │                    │  (also manual)      │
                     │                    └────────┬────────────┘
                     │                             │
                     │                    ┌────────▼────────────────────┐
                     │                    │  DrawExecutionService        │
-                    │                    │  (runs @Async)              │
+                    │                    │  (runs @Async)               │
                     │                    │                              │
                     │                    │  1. Generate winning numbers │
                     │                    │  2. Save to Draw entity      │
@@ -657,9 +658,49 @@ curl http://localhost:8080/api/v1/tickets/my-results \
 
 ---
 
-## 6. Testing Approach
+## 6. Testing with Postman
 
-### 6.1 Test Strategy
+The `postman/` directory contains the API collection. You need to create a local environment manually before running requests.
+
+### 6.1 Import the Collection
+
+1. Open Postman
+2. Click **Import** → select `postman/LottoFun API.postman_collection.json`
+
+### 6.2 Create a Local Environment
+
+1. Click **Environments** in the left sidebar → **+** (New Environment)
+2. Name it `LottoFun Local`
+3. Add the following variables:
+
+| Variable      | Initial Value                  |
+|---------------|--------------------------------|
+| `base_url`    | `http://localhost:8080/api/v1` |
+| `token`       | _(leave empty)_                |
+| `admin_token` | _(leave empty)_                |
+
+4. Click **Save**
+5. Select **LottoFun Local** from the environment dropdown (top-right)
+
+### 6.3 Suggested Test Flow
+
+Tokens are saved automatically via collection scripts — no manual copy-paste needed.
+
+```
+1. POST /auth/login          (admin credentials)  → admin_token saved automatically
+2. POST /draws/start                              → creates an OPEN draw
+3. POST /auth/register       (any username)       → token saved automatically
+4. POST /tickets/buy                              → purchase a ticket
+5. POST /draws/execute                            → triggers prize distribution
+6. GET  /tickets/my-results                       → verify ticket status & prize
+7. GET  /draws/history                            → verify draw results
+```
+
+---
+
+## 7. Testing Approach
+
+### 7.1 Test Strategy
 
 The project uses **unit testing** with JUnit 5, Mockito, and AssertJ. All tests are isolated — no Spring context is loaded, no database is required.
 
@@ -675,7 +716,7 @@ src/test/java/com/bmc/lottofun/service/
 
 **Total: 28 unit tests**
 
-### 6.2 What Each Test Suite Covers
+### 7.2 What Each Test Suite Covers
 
 | Test Class | Focuses On |
 |------------|-----------|
@@ -686,7 +727,7 @@ src/test/java/com/bmc/lottofun/service/
 | `DrawServiceTest` | Create draw, conflict on duplicate, retrieve active draw, not found |
 | `AuthServiceTest` | New user registration, duplicate username, valid login, bad credentials |
 
-### 6.3 Key Testing Techniques Used
+### 7.3 Key Testing Techniques Used
 
 | Technique | Used In | Purpose |
 |-----------|---------|---------|
@@ -699,7 +740,7 @@ src/test/java/com/bmc/lottofun/service/
 | `assertThatCode().doesNotThrowAnyException()` | TicketValidatorTest | Assert happy paths |
 | `initPrizeCategories()` manually | PrizeDistributionTest | Replicate `@PostConstruct` in unit test |
 
-### 6.4 Running the Tests
+### 7.4 Running the Tests
 
 ```bash
 # Run all unit tests
@@ -715,7 +756,7 @@ src/test/java/com/bmc/lottofun/service/
 docker compose run --rm app ./mvnw test
 ```
 
-### 6.5 Test Coverage by Component
+### 7.5 Test Coverage by Component
 
 ```
                         Covered by unit tests?
