@@ -2,6 +2,7 @@ package com.bmc.lottofun.service;
 
 import com.bmc.lottofun.entity.User;
 import com.bmc.lottofun.exception.BadRequestException;
+import com.bmc.lottofun.exception.NotFoundException;
 import com.bmc.lottofun.repository.UserRepository;
 import com.bmc.lottofun.service.interfaces.IUserService;
 import lombok.RequiredArgsConstructor;
@@ -18,16 +19,25 @@ public class UserService implements IUserService {
 
     @Transactional
     public void deductBalance(User user, BigDecimal amount) {
-        if (user.getBalance().compareTo(amount) < 0) {
+        requirePositive(amount);
+        int updated = userRepository.deductBalanceIfSufficient(user.getId(), amount);
+        if (updated == 0) {
             throw new BadRequestException("Insufficient balance");
         }
-        user.setBalance(user.getBalance().subtract(amount));
-        userRepository.save(user);
     }
 
     @Transactional
     public void addBalance(User user, BigDecimal amount) {
-        user.setBalance(user.getBalance().add(amount));
-        userRepository.save(user);
+        requirePositive(amount);
+        int updated = userRepository.addBalance(user.getId(), amount);
+        if (updated == 0) {
+            throw new NotFoundException("User not found");
+        }
+    }
+
+    private void requirePositive(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new BadRequestException("Amount must be positive");
+        }
     }
 }

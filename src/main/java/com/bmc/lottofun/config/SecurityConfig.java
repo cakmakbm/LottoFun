@@ -27,32 +27,21 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-
+                // Stateless JWT API: no session cookie, so CSRF protection is not needed.
                 .csrf(AbstractHttpConfigurer::disable)
-
-
-               /* .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .anyRequest().authenticated()
-                )*/
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/error").permitAll() // <--- İŞTE BU SATIR HAYAT KURTARIR!
+                        // Spring Boot forwards errors to /error; it must be reachable to return error bodies.
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
-
-
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
-
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-
                 .authenticationProvider(authenticationProvider)
-
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

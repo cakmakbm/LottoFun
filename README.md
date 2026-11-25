@@ -1,5 +1,7 @@
 # LottoFun
 
+[![CI/CD](https://github.com/cakmakbm/LottoFun/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/cakmakbm/LottoFun/actions/workflows/ci-cd.yml)
+
 A RESTful lottery backend built with Spring Boot. Users register, purchase tickets for open draws, and receive prizes automatically when the draw is executed.
 
 ## Features
@@ -18,7 +20,7 @@ A RESTful lottery backend built with Spring Boot. Users register, purchase ticke
 | Layer          | Technology                          |
 |----------------|-------------------------------------|
 | Language       | Java 17                             |
-| Framework      | Spring Boot 3.x                     |
+| Framework      | Spring Boot 4.x                     |
 | Security       | Spring Security + JWT (jjwt 0.11.5) |
 | Persistence    | Spring Data JPA / Hibernate         |
 | Database       | PostgreSQL 16                       |
@@ -32,8 +34,17 @@ A RESTful lottery backend built with Spring Boot. Users register, purchase ticke
 ```bash
 git clone https://github.com/cakmakbm/LottoFun.git
 cd LottoFun
+
+# Create your local secrets file (it is git-ignored) and fill in the values
+cp .env.example .env
+#   POSTGRES_PASSWORD=<any password>
+#   JWT_SECRET=<output of: openssl rand -base64 32>
+#   ADMIN_PASSWORD=<password for the admin account>
+
 docker compose up --build
 ```
+
+No secrets are stored in the repository. The app refuses to start without `JWT_SECRET`, and the admin account is only created when `ADMIN_PASSWORD` is set.
 
 The application will be available at `http://localhost:8080`.
 
@@ -57,7 +68,11 @@ spring.datasource.url=jdbc:postgresql://localhost:5432/lottofun
 spring.datasource.username=your_user
 spring.datasource.password=your_password
 
-# 3. Build and run
+# 3. Provide secrets as environment variables
+export JWT_SECRET=$(openssl rand -base64 32)
+export ADMIN_PASSWORD=<password for the admin account>
+
+# 4. Build and run
 ./mvnw clean package -DskipTests
 java -jar target/LottoFun-0.0.1-SNAPSHOT.jar
 ```
@@ -87,7 +102,7 @@ Authorization: Bearer <jwt_token>
 # 1. Login as admin (created automatically on startup)
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"<your ADMIN_PASSWORD>"}'
 
 ADMIN_TOKEN="<token from response>"
 
@@ -143,7 +158,19 @@ curl http://localhost:8080/api/v1/tickets/my-results \
 ./mvnw test
 ```
 
-28 unit tests covering all service classes (no Spring context, no database required).
+- **31 unit tests** covering all service classes and the global exception handler (no Spring context, no database required).
+- **1 concurrency integration test** that fires 20 simultaneous purchases at one account on an in-memory H2 database and checks the balance is never overdrawn and no deduction is lost.
+
+## CI/CD
+
+GitHub Actions ([`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml)) runs on every push and pull request:
+
+1. **Build and test**: compiles with Java 17 and runs all tests with `./mvnw verify`. Test reports are uploaded as a build artifact.
+2. **Publish Docker image**: only after tests pass on `main`, builds the Docker image and pushes it to GitHub Container Registry as `ghcr.io/cakmakbm/lottofun:latest` and a commit-SHA tag.
+
+```bash
+docker pull ghcr.io/cakmakbm/lottofun:latest
+```
 
 ## Postman Collection
 

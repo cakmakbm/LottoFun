@@ -1,5 +1,7 @@
 package com.bmc.lottofun.security;
 
+import io.jsonwebtoken.JwtException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,13 +44,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
 
 
-        username = jwtService.extractUsername(jwt);
+        try {
+            username = jwtService.extractUsername(jwt);
+        } catch (JwtException | IllegalArgumentException ex) {
+            // Expired, malformed or wrongly signed token: continue unauthenticated,
+            // so protected endpoints answer 401 instead of 500.
+            filterChain.doFilter(request, response);
+            return;
+        }
 
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            UserDetails userDetails;
+            try {
+                userDetails = this.userDetailsService.loadUserByUsername(username);
+            } catch (UsernameNotFoundException ex) {
+                // Token belongs to a user that no longer exists.
+                filterChain.doFilter(request, response);
+                return;
+            }
 
 
             if (jwtService.isTokenValid(jwt, userDetails)) {

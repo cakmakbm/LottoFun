@@ -2,6 +2,8 @@ package com.bmc.lottofun;
 
 import com.bmc.lottofun.entity.User;
 import com.bmc.lottofun.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.math.BigDecimal;
 
 
+@Slf4j
 @SpringBootApplication
 @EnableAsync
 @EnableScheduling
@@ -22,18 +25,27 @@ public class LottoFunApplication {
 
         SpringApplication.run(LottoFunApplication.class, args);
     }
+
     @Bean
-    CommandLineRunner initAdmin(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    CommandLineRunner initAdmin(UserRepository userRepository,
+                                PasswordEncoder passwordEncoder,
+                                @Value("${lotto.admin.password:}") String adminPassword) {
         return args -> {
-            if (!userRepository.existsByUsername("admin")) {
-                User admin = User.builder()
-                        .username("admin")
-                        .password(passwordEncoder.encode("admin123"))
-                        .balance(BigDecimal.ZERO)
-                        .role("ROLE_ADMIN")
-                        .build();
-                userRepository.save(admin);
+            if (userRepository.existsByUsername("admin")) {
+                return;
             }
+            if (adminPassword == null || adminPassword.isBlank()) {
+                log.warn("ADMIN_PASSWORD is not set, so no admin account was created.");
+                return;
+            }
+            User admin = User.builder()
+                    .username("admin")
+                    .password(passwordEncoder.encode(adminPassword))
+                    .balance(BigDecimal.ZERO)
+                    .role("ROLE_ADMIN")
+                    .build();
+            userRepository.save(admin);
+            log.info("Admin account created.");
         };
     }
 

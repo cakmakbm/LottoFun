@@ -68,7 +68,7 @@
 | Layer            | Technology                          |
 |------------------|-------------------------------------|
 | Language         | Java 17                             |
-| Framework        | Spring Boot 3.x                  |
+| Framework        | Spring Boot 4.x                  |
 | Security         | Spring Security + JWT (jjwt 0.11.5) |
 | Persistence      | Spring Data JPA / Hibernate         |
 | Database         | PostgreSQL 16                       |
@@ -201,6 +201,16 @@ RuntimeException
     ├── NotFoundException     → HTTP 404
     └── ConflictException     → HTTP 409
 ```
+
+`GlobalExceptionHandler` also maps framework errors to consistent JSON responses:
+
+| Exception | HTTP | Message returned to client |
+|-----------|------|----------------------------|
+| `MethodArgumentNotValidException` | 400 | Field-level validation messages |
+| `HttpMessageNotReadableException` | 400 | `Request body is missing or malformed` |
+| `AuthenticationException` (wrong credentials) | 401 | `Invalid username or password` |
+| `AccessDeniedException` (missing role) | 403 | `You do not have permission to perform this action` |
+| Any other exception | 500 | `An unexpected error occurred` (details are logged server-side only) |
 
 ---
 
@@ -605,7 +615,9 @@ All configurable values are passed as environment variables:
 | `SPRING_DATASOURCE_URL`         | _(required)_     | PostgreSQL JDBC URL       |
 | `SPRING_DATASOURCE_USERNAME`    | _(required)_     | DB username               |
 | `SPRING_DATASOURCE_PASSWORD`    | _(required)_     | DB password               |
-| `JWT_SECRET`                    | _(required)_     | 256-bit hex secret key    |
+| `JWT_SECRET`                    | _(required)_     | Base64-encoded HMAC key, at least 256 bits (`openssl rand -base64 32`) |
+| `ADMIN_PASSWORD`                | _(empty)_        | Admin account password; admin is not created when empty |
+| `POSTGRES_PASSWORD`             | _(required)_     | Database password, read from `.env` by Docker Compose |
 | `JWT_EXPIRATION`                | `86400000`       | Token TTL in milliseconds |
 | `LOTTERY_RULE_NUMBER_COUNT`     | `5`              | Numbers per ticket        |
 | `LOTTERY_RULE_MIN_NUMBER`       | `1`              | Minimum selectable number |
@@ -624,7 +636,7 @@ All configurable values are passed as environment variables:
 # 1. Login as admin (auto-created at startup)
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"<your ADMIN_PASSWORD>"}'
 # → {"token":"eyJ..."}
 
 ADMIN_TOKEN="eyJ..."
@@ -702,26 +714,32 @@ Tokens are saved automatically via collection scripts — no manual copy-paste n
 
 ### 7.1 Test Strategy
 
-The project uses **unit testing** with JUnit 5, Mockito, and AssertJ. All tests are isolated — no Spring context is loaded, no database is required.
+The project uses **unit testing** with JUnit 5, Mockito, and AssertJ. Unit tests are isolated — no Spring context is loaded, no database is required. One integration test runs against an in-memory H2 database to verify balance updates under concurrent requests.
 
 ```
 src/test/java/com/bmc/lottofun/service/
 ├── TicketValidatorTest.java       (6 tests  — pure logic, zero mocks)
-├── UserServiceTest.java           (4 tests  — financial operations)
+├── UserServiceTest.java           (4 tests  — atomic financial operations)
 ├── TicketServiceTest.java         (4 tests  — core purchase flow)
 ├── PrizeDistributionServiceTest.java (6 tests — prize categories)
 ├── DrawServiceTest.java           (4 tests  — draw management)
-└── AuthServiceTest.java           (4 tests  — register & login)
+├── AuthServiceTest.java           (4 tests  — register & login)
+└── BalanceConcurrencyIntegrationTest.java (1 test — 20 concurrent purchases, H2)
+
+src/test/java/com/bmc/lottofun/exception/
+└── GlobalExceptionHandlerTest.java (3 tests — 500 / 401 / 403 responses)
 ```
 
-**Total: 28 unit tests**
+**Total: 31 unit tests + 1 concurrency integration test**
 
 ### 7.2 What Each Test Suite Covers
 
 | Test Class | Focuses On |
 |------------|-----------|
 | `TicketValidatorTest` | Boundary values, count check, uniqueness, range validation |
-| `UserServiceTest` | Deduct with sufficient/exact/insufficient balance, add balance |
+| `UserServiceTest` | Atomic deduct (success / insufficient), non-positive amount rejected, atomic add |
+| `GlobalExceptionHandlerTest` | Internal error messages are hidden, wrong credentials → 401, missing role → 403 |
+| `BalanceConcurrencyIntegrationTest` | 20 simultaneous purchases on a 5-ticket balance: exactly 5 succeed, balance ends at 0 |
 | `TicketServiceTest` | Happy path, no active draw, validation abort, single deduction guarantee |
 | `PrizeDistributionServiceTest` | All 4 prize tiers, multi-ticket distribution, empty draw |
 | `DrawServiceTest` | Create draw, conflict on duplicate, retrieve active draw, not found |

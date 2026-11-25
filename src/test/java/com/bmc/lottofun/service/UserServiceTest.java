@@ -14,6 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,49 +41,51 @@ class UserServiceTest {
     // --- deductBalance ---
 
     @Test
-    @DisplayName("Sufficient balance should be deducted and user saved")
-    void deductBalance_sufficientFunds_shouldDeductAndSave() {
+    @DisplayName("Sufficient balance should be deducted with a single atomic update")
+    void deductBalance_sufficientFunds_shouldUseAtomicUpdate() {
         BigDecimal ticketPrice = new BigDecimal("10.00");
+        when(userRepository.deductBalanceIfSufficient(1L, ticketPrice)).thenReturn(1);
 
-        userService.deductBalance(user, ticketPrice);
+        assertThatCode(() -> userService.deductBalance(user, ticketPrice)).doesNotThrowAnyException();
 
-        assertThat(user.getBalance()).isEqualByComparingTo("90.00");
-        verify(userRepository).save(user);
-    }
-
-    @Test
-    @DisplayName("Insufficient balance should throw BadRequestException and not save")
-    void deductBalance_insufficientFunds_shouldThrow() {
-        BigDecimal amount = new BigDecimal("200.00");
-
-        assertThatThrownBy(() -> userService.deductBalance(user, amount))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Insufficient balance");
-
+        verify(userRepository).deductBalanceIfSufficient(1L, ticketPrice);
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("Amount equal to balance should succeed and result in zero balance")
-    void deductBalance_exactBalance_shouldSucceed() {
-        BigDecimal amount = new BigDecimal("100.00");
+    @DisplayName("Insufficient balance (no row updated) should throw BadRequestException")
+    void deductBalance_insufficientFunds_shouldThrow() {
+        BigDecimal amount = new BigDecimal("200.00");
+        when(userRepository.deductBalanceIfSufficient(1L, amount)).thenReturn(0);
 
-        userService.deductBalance(user, amount);
+        assertThatThrownBy(() -> userService.deductBalance(user, amount))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Insufficient balance");
+    }
 
-        assertThat(user.getBalance()).isEqualByComparingTo("0.00");
-        verify(userRepository).save(user);
+    @Test
+    @DisplayName("Zero or negative amount should be rejected before touching the database")
+    void deductBalance_nonPositiveAmount_shouldThrow() {
+        assertThatThrownBy(() -> userService.deductBalance(user, new BigDecimal("-10.00")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Amount must be positive");
+        assertThatThrownBy(() -> userService.deductBalance(user, BigDecimal.ZERO))
+                .isInstanceOf(BadRequestException.class);
+
+        verify(userRepository, never()).deductBalanceIfSufficient(anyLong(), any());
     }
 
     // --- addBalance ---
 
     @Test
-    @DisplayName("Prize amount should be added to balance and user saved")
-    void addBalance_shouldIncreaseBalanceAndSave() {
+    @DisplayName("Prize amount should be added with a single atomic update")
+    void addBalance_shouldUseAtomicUpdate() {
         BigDecimal prize = new BigDecimal("5000.00");
+        when(userRepository.addBalance(1L, prize)).thenReturn(1);
 
         userService.addBalance(user, prize);
 
-        assertThat(user.getBalance()).isEqualByComparingTo("5100.00");
-        verify(userRepository).save(user);
+        verify(userRepository).addBalance(1L, prize);
+        verify(userRepository, never()).save(any());
     }
 }
