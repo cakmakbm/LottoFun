@@ -289,6 +289,7 @@ saveAll(tickets)
 - Prize category map is built once at startup via `@PostConstruct`, not recalculated per ticket.
 - The entire distribution runs inside a single `@Transactional` method — if any step fails, all balance updates and ticket updates roll back atomically.
 - Draw execution runs `@Async` so it never blocks the HTTP response.
+- The scheduler and the admin endpoint can trigger the same draw at the same time. `executeDraw` first claims the draw with one conditional `UPDATE draws SET status = COMPLETED WHERE id = ? AND status = OPEN`. Only the call that updates the row continues; the others return `false` without paying prizes or creating another draw. If the winning transaction rolls back, the draw is OPEN again.
 
 ### 3.3 Lottery Rules
 
@@ -714,7 +715,7 @@ Tokens are saved automatically via collection scripts — no manual copy-paste n
 
 ### 7.1 Test Strategy
 
-The project uses **unit testing** with JUnit 5, Mockito, and AssertJ. Unit tests are isolated — no Spring context is loaded, no database is required. One integration test runs against an in-memory H2 database to verify balance updates under concurrent requests.
+The project uses **unit testing** with JUnit 5, Mockito, and AssertJ. Unit tests are isolated — no Spring context is loaded, no database is required. Two integration tests run against an in-memory H2 database to verify behaviour under concurrent requests: balance updates, and draw execution through the real `@Async` executor.
 
 ```
 src/test/java/com/bmc/lottofun/service/
@@ -724,13 +725,14 @@ src/test/java/com/bmc/lottofun/service/
 ├── PrizeDistributionServiceTest.java (6 tests — prize categories)
 ├── DrawServiceTest.java           (4 tests  — draw management)
 ├── AuthServiceTest.java           (4 tests  — register & login)
-└── BalanceConcurrencyIntegrationTest.java (1 test — 20 concurrent purchases, H2)
+├── BalanceConcurrencyIntegrationTest.java (1 test — 20 concurrent purchases, H2)
+└── DrawExecutionConcurrencyIntegrationTest.java (1 test — 10 concurrent executions of one draw, H2)
 
 src/test/java/com/bmc/lottofun/exception/
 └── GlobalExceptionHandlerTest.java (3 tests — 500 / 401 / 403 responses)
 ```
 
-**Total: 31 unit tests + 1 concurrency integration test**
+**Total: 31 unit tests + 2 concurrency integration tests**
 
 ### 7.2 What Each Test Suite Covers
 
@@ -740,6 +742,7 @@ src/test/java/com/bmc/lottofun/exception/
 | `UserServiceTest` | Atomic deduct (success / insufficient), non-positive amount rejected, atomic add |
 | `GlobalExceptionHandlerTest` | Internal error messages are hidden, wrong credentials → 401, missing role → 403 |
 | `BalanceConcurrencyIntegrationTest` | 20 simultaneous purchases on a 5-ticket balance: exactly 5 succeed, balance ends at 0 |
+| `DrawExecutionConcurrencyIntegrationTest` | 10 simultaneous executions of one draw: exactly 1 runs, the draw is COMPLETED, exactly 1 next draw is OPEN |
 | `TicketServiceTest` | Happy path, no active draw, validation abort, single deduction guarantee |
 | `PrizeDistributionServiceTest` | All 4 prize tiers, multi-ticket distribution, empty draw |
 | `DrawServiceTest` | Create draw, conflict on duplicate, retrieve active draw, not found |
@@ -787,7 +790,7 @@ docker compose build
   PrizeDistributionService ───┤ YES — all 4 prize categories
   DrawService ────────────────┤ YES — start, conflict, get, not found
   AuthService ────────────────┤ YES — register, duplicate, login, bad creds
-  DrawExecutionService ───────┤ PARTIAL — async orchestration; integration test recommended
+  DrawExecutionService ───────┤ YES — concurrent execution via integration test
   NumberGeneratorService ─────┤ NOT COVERED — SecureRandom, statistical; property-based test recommended
   JwtService ─────────────────┤ NOT COVERED — crypto; tested implicitly via auth flow
   AuthHelper ─────────────────┤ NOT COVERED — thin wrapper; tested via TicketService mock

@@ -159,7 +159,9 @@ curl http://localhost:8080/api/v1/tickets/my-results \
 ```
 
 - **31 unit tests** covering all service classes and the global exception handler (no Spring context, no database required).
-- **1 concurrency integration test** that fires 20 simultaneous purchases at one account on an in-memory H2 database and checks the balance is never overdrawn and no deduction is lost.
+- **2 concurrency integration tests** on an in-memory H2 database:
+  - 20 simultaneous purchases at one account: the balance is never overdrawn and no deduction is lost.
+  - 10 simultaneous executions of the same draw through the real `@Async` executor: the draw runs exactly once and exactly one next draw is created.
 
 ## CI/CD
 

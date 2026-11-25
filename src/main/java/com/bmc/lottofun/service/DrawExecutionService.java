@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -26,7 +27,17 @@ public class DrawExecutionService implements IDrawExecutionService {
 
     @Async
     @Transactional
-    public void executeDraw(Draw draw) {
+    public CompletableFuture<Boolean> executeDraw(Draw draw) {
+        // The scheduler and the admin endpoint can trigger the same draw at the same time.
+        // Only one execution may win: the OPEN -> COMPLETED switch is a single conditional
+        // UPDATE, so a second thread either waits for the row lock and then updates 0 rows,
+        // or sees COMPLETED right away. If this transaction rolls back, the draw is OPEN again.
+        int claimed = drawRepository.markCompletedIfOpen(draw.getId(), DrawStatus.OPEN, DrawStatus.COMPLETED);
+        if (claimed == 0) {
+            log.info("Draw ID: {} was already executed, skipping.", draw.getId());
+            return CompletableFuture.completedFuture(false);
+        }
+
         log.info("Draw ID: {} executing...", draw.getId());
 
         Set<Integer> winningNumbers = numberGeneratorService.generateWinningNumbers();
@@ -43,5 +54,6 @@ public class DrawExecutionService implements IDrawExecutionService {
         drawRepository.save(nextDraw);
 
         log.info("Draw completed, next draw created.");
+        return CompletableFuture.completedFuture(true);
     }
 }
