@@ -730,9 +730,12 @@ src/test/java/com/bmc/lottofun/service/
 
 src/test/java/com/bmc/lottofun/exception/
 └── GlobalExceptionHandlerTest.java (3 tests — 500 / 401 / 403 responses)
+
+src/test/java/com/bmc/lottofun/config/
+└── HealthEndpointsIntegrationTest.java (2 tests — public probes, other actuator endpoints closed)
 ```
 
-**Total: 31 unit tests + 2 concurrency integration tests**
+**Total: 31 unit tests + 2 concurrency integration tests + 2 health endpoint tests**
 
 ### 7.2 What Each Test Suite Covers
 
@@ -742,6 +745,7 @@ src/test/java/com/bmc/lottofun/exception/
 | `UserServiceTest` | Atomic deduct (success / insufficient), non-positive amount rejected, atomic add |
 | `GlobalExceptionHandlerTest` | Internal error messages are hidden, wrong credentials → 401, missing role → 403 |
 | `BalanceConcurrencyIntegrationTest` | 20 simultaneous purchases on a 5-ticket balance: exactly 5 succeed, balance ends at 0 |
+| `HealthEndpointsIntegrationTest` | Liveness and readiness respond UP without a token; `/actuator/env` and `/actuator/beans` are not public |
 | `DrawExecutionConcurrencyIntegrationTest` | 10 simultaneous executions of one draw: exactly 1 runs, the draw is COMPLETED, exactly 1 next draw is OPEN |
 | `TicketServiceTest` | Happy path, no active draw, validation abort, single deduction guarantee |
 | `PrizeDistributionServiceTest` | All 4 prize tiers, multi-ticket distribution, empty draw |

@@ -33,6 +33,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Spring Boot forwards errors to /error; it must be reachable to return error bodies.
                         .requestMatchers("/error").permitAll()
+                        // Kubernetes liveness and readiness probes; only health is exposed.
+                        .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

@@ -9,7 +9,10 @@ RUN mvn -q verify
 
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
+# Run as a non-root user; Kubernetes also enforces runAsNonRoot.
+RUN groupadd --system --gid 10001 lottofun && useradd --system --uid 10001 --gid lottofun lottofun
 COPY --from=builder /app/target/*.jar app.jar
+USER 10001
 
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

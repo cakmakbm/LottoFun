@@ -1,0 +1,11 @@
+# Local kind cluster: uses an image built on this machine and loaded with
+# `kind load docker-image`, instead of pulling from GHCR.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/cakmakbm/lottofun
+    newTag: local
