@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lottofun
+  labels:
+    app.kubernetes.io/name: lottofun
+spec:
+  selector:
+    app.kubernetes.io/name: lottofun
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lottofun
+  labels:
+    app.kubernetes.io/name: lottofun
+spec:
+  # Two replicas both run the @Scheduled draw check. That is safe because a draw is
+  # claimed with one conditional UPDATE, so only one replica can execute it.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lottofun
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lottofun
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Start the app only once PostgreSQL accepts connections.
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          # -U is required: libpq cannot derive a user name from the non-root UID.
+          command: ["sh", "-c", "until pg_isready -h postgres -p 5432 -U \"$PGUSER\"; do echo waiting for postgres; sleep 2; done"]
+          env:
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef: { name: lottofun-config, key: SPRING_DATASOURCE_USERNAME }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      containers:
+        - name: lottofun
+          image: ghcr.io/cakmakbm/lottofun:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: lottofun-config
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: lottofun-secrets, key: POSTGRES_PASSWORD }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: lottofun-secrets, key: JWT_SECRET }
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: lottofun-secrets, key: ADMIN_PASSWORD }
+            # Size the heap from the container memory limit.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75"
+          # Gives a slow first start up to 2.5 minutes before liveness checks begin.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness includes the database, so a pod that cannot reach it gets no traffic.
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            # Let the Service stop routing to this pod before shutdown begins.
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          resources:
+            requests: { cpu: 250m, memory: 384Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            # Tomcat needs a writable temp directory; the root filesystem is read-only.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: lottofun
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lottofun

@@ -8,6 +8,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,8 +45,13 @@ public class LottoFunApplication {
                     .balance(BigDecimal.ZERO)
                     .role("ROLE_ADMIN")
                     .build();
-            userRepository.save(admin);
-            log.info("Admin account created.");
+            try {
+                userRepository.save(admin);
+                log.info("Admin account created.");
+            } catch (DataIntegrityViolationException e) {
+                // Several replicas can start at once; another one created the admin first.
+                log.info("Admin account was created by another instance.");
+            }
         };
     }
 

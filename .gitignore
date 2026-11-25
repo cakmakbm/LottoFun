@@ -34,3 +34,4 @@ build/
 
 ### Local secrets ###
 .env
+k8s/base/secrets.env

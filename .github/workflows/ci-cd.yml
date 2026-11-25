@@ -34,9 +34,51 @@ jobs:
           name: test-reports
           path: target/surefire-reports/
 
+  kubernetes-deploy:
+    name: Deploy to Kubernetes (kind)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: lottofun
+
+      - name: Build image and load it into kind
+        run: |
+          docker build -t ghcr.io/cakmakbm/lottofun:local .
+          kind load docker-image ghcr.io/cakmakbm/lottofun:local --name lottofun
+
+      # Throwaway secrets for this CI cluster only.
+      - name: Generate secrets
+        run: |
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "JWT_SECRET=$(openssl rand -base64 32)"
+            echo "ADMIN_PASSWORD=$(openssl rand -hex 12)"
+          } > k8s/base/secrets.env
+
+      - name: Deploy
+        run: |
+          kubectl apply -k k8s/overlays/kind
+          kubectl -n lottofun rollout status statefulset/postgres --timeout=180s
+          kubectl -n lottofun rollout status deployment/lottofun --timeout=300s
+
+      - name: Smoke test
+        run: ./k8s/smoke-test.sh
+
+      - name: Show cluster state on failure
+        if: failure()
+        run: |
+          kubectl -n lottofun get all
+          kubectl -n lottofun describe pods
+          kubectl -n lottofun logs -l app.kubernetes.io/name=lottofun --all-containers --tail=100
+
   publish-image:
     name: Publish Docker image
-    needs: build-and-test
+    needs: [build-and-test, kubernetes-deploy]
     # Only main is delivered; pull requests and develop are tested but not published.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

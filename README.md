@@ -26,6 +26,7 @@ A RESTful lottery backend built with Spring Boot. Users register, purchase ticke
 | Database       | PostgreSQL 16                       |
 | Build Tool     | Maven 3.9                           |
 | Containerization | Docker + Docker Compose           |
+| Orchestration  | Kubernetes (Kustomize), kind for local and CI |
 
 ## Getting Started
 
@@ -76,6 +77,57 @@ export ADMIN_PASSWORD=<password for the admin account>
 ./mvnw clean package -DskipTests
 java -jar target/LottoFun-0.0.1-SNAPSHOT.jar
 ```
+
+### Run on Kubernetes
+
+Manifests live in [`k8s/`](k8s) and are managed with Kustomize (built into `kubectl`):
+
+| Resource | Purpose |
+|----------|---------|
+| `StatefulSet` `postgres` + headless `Service` | PostgreSQL 16 with a 1 Gi persistent volume |
+| `Deployment` `lottofun` (2 replicas) + `Service` | The API, rolled out with `maxUnavailable: 0` |
+| `ConfigMap` / `Secret` (generated) | Lottery rules and datasource settings / DB password, JWT secret, admin password |
+| `PodDisruptionBudget` | Keeps at least one API pod running during node maintenance |
+
+Each API pod has:
+
+- **Probes**: a startup probe, a liveness probe at `/actuator/health/liveness`, and a readiness probe at `/actuator/health/readiness`. The readiness probe includes the database, so a pod that cannot reach PostgreSQL gets no traffic.
+- **An init container** that waits for PostgreSQL to accept connections.
+- **Graceful shutdown**: a `preStop` delay and Spring's graceful shutdown, so in-flight requests finish.
+- **Hardening**: it runs as a non-root user with a read-only root filesystem, no privilege escalation, and all Linux capabilities dropped.
+- **Resource requests and limits**, with the JVM heap sized from the memory limit.
+
+Running two replicas is safe because both run the `@Scheduled` draw check, but a draw is claimed with one conditional `UPDATE`, so only one replica can execute it.
+
+Local cluster with [kind](https://kind.sigs.k8s.io/):
+
+```bash
+kind create cluster --name lottofun
+
+# Build the image and load it into the cluster (no registry needed)
+docker build -t ghcr.io/cakmakbm/lottofun:local .
+kind load docker-image ghcr.io/cakmakbm/lottofun:local --name lottofun
+
+# Secrets (git-ignored)
+cp k8s/base/secrets.env.example k8s/base/secrets.env
+#   POSTGRES_PASSWORD=<any password>
+#   JWT_SECRET=<output of: openssl rand -base64 32>
+#   ADMIN_PASSWORD=<password for the admin account>
+
+kubectl apply -k k8s/overlays/kind
+kubectl -n lottofun rollout status deployment/lottofun
+
+# End-to-end check through the Service
+./k8s/smoke-test.sh
+
+# Use the API at http://localhost:8080
+kubectl -n lottofun port-forward svc/lottofun 8080:80
+
+# Clean up
+kind delete cluster --name lottofun
+```
+
+`k8s/base` uses `ghcr.io/cakmakbm/lottofun:latest` from GitHub Container Registry; `k8s/overlays/kind` swaps in the locally built `:local` image.
 
 ## API Overview
 
@@ -159,6 +211,7 @@ curl http://localhost:8080/api/v1/tickets/my-results \
 ```
 
 - **31 unit tests** covering all service classes and the global exception handler (no Spring context, no database required).
+- **2 health endpoint tests** checking that the Kubernetes probes are public and no other actuator endpoint is.
 - **2 concurrency integration tests** on an in-memory H2 database:
   - 20 simultaneous purchases at one account: the balance is never overdrawn and no deduction is lost.
   - 10 simultaneous executions of the same draw through the real `@Async` executor: the draw runs exactly once and exactly one next draw is created.
@@ -168,7 +221,8 @@ curl http://localhost:8080/api/v1/tickets/my-results \
 GitHub Actions ([`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml)) runs on every push and pull request:
 
 1. **Build and test**: compiles with Java 17 and runs all tests with `./mvnw verify`. Test reports are uploaded as a build artifact.
-2. **Publish Docker image**: only after tests pass on `main`, builds the Docker image and pushes it to GitHub Container Registry as `ghcr.io/cakmakbm/lottofun:latest` and a commit-SHA tag.
+2. **Deploy to Kubernetes (kind)**: creates a kind cluster, builds and loads the image, applies `k8s/overlays/kind`, waits for both rollouts and runs [`k8s/smoke-test.sh`](k8s/smoke-test.sh) against the deployed Service.
+3. **Publish Docker image**: only on `main`, and only after the first two jobs pass, builds the Docker image and pushes it to GitHub Container Registry as `ghcr.io/cakmakbm/lottofun:latest` and a commit-SHA tag.
 
 ```bash
 docker pull ghcr.io/cakmakbm/lottofun:latest
