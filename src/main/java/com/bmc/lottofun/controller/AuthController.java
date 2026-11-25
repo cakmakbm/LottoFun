@@ -1,5 +1,6 @@
 package com.bmc.lottofun.controller;
 
+import jakarta.validation.Valid;
 import com.bmc.lottofun.dto.response.AuthResponse;
 import com.bmc.lottofun.dto.request.UserLoginRequest;
 import com.bmc.lottofun.dto.request.UserRegisterRequest;
@@ -19,12 +20,12 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody UserRegisterRequest request) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody UserRegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody UserLoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody UserLoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 }

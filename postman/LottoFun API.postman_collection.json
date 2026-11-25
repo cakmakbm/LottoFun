@@ -88,7 +88,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{admin_password}}\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -200,6 +200,10 @@
     {
       "key": "base_url",
       "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "admin_password",
+      "value": ""
     }
   ]
 }
